@@ -1,74 +1,31 @@
-const MODULE_NAME = 'save_message_markdown';
-
 const BUTTON_CLASS = 'save-message-md-button';
 
-/**
- * Create the download button for a message.
- */
-function createButton(messageId) {
-    const button = document.createElement('div');
-
-    button.className = `mes_button ${BUTTON_CLASS}`;
-    button.title = 'Save message as Markdown';
-    button.innerHTML = '<i class="fa-solid fa-file-arrow-down"></i>';
-
-    button.dataset.messageId = messageId;
-
-    button.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-
-        downloadMessageAsMarkdown(Number(messageId));
-    });
-
-    return button;
-}
-
-/**
- * Download a specific SillyTavern chat message as a Markdown file.
- */
-function downloadMessageAsMarkdown(messageId) {
+function downloadMessage(messageId) {
     const context = SillyTavern.getContext();
-    const chat = context.chat;
 
-    if (!chat || !chat[messageId]) {
-        toastr.error('Could not find the selected message.');
-        console.error(`[${MODULE_NAME}] Message not found:`, messageId);
+    if (!context || !context.chat) {
+        toastr.error('Could not access SillyTavern chat data.');
         return;
     }
 
-    const message = chat[messageId];
+    const message = context.chat[messageId];
 
-    if (!message.mes) {
-        toastr.error('The selected message has no text.');
+    if (!message) {
+        toastr.error('Could not find this message.');
+        console.error('Save Message Markdown: message not found:', messageId);
         return;
     }
 
-    // The message text itself.
-    const text = message.mes;
+    const text = message.mes ?? '';
 
-    // Use the message's displayed name if available.
-    const name = message.name || 'Message';
+    if (!text) {
+        toastr.warning('This message is empty.');
+        return;
+    }
 
-    // Determine whether this is a user message.
-    const isUser = message.is_user === true;
+    const filename = `Zach_${String(messageId).padStart(3, '0')}.md`;
 
-    // Build the Markdown document.
-    const markdown = `# ${name}
-
-${text}
-`;
-
-    // Create a safe filename.
-    const safeName = name
-        .replace(/[<>:"/\\|?*\x00-\x1F]/g, '')
-        .replace(/\s+/g, '_')
-        .substring(0, 50) || 'Message';
-
-    const filename = `${safeName}_${String(messageId).padStart(3, '0')}.md`;
-
-    // Create the downloadable file.
-    const blob = new Blob([markdown], {
+    const blob = new Blob([text], {
         type: 'text/markdown;charset=utf-8'
     });
 
@@ -82,27 +39,23 @@ ${text}
     link.click();
     link.remove();
 
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
 
-    toastr.success(`Saved ${filename}`);
+    toastr.success(`Downloaded ${filename}`);
 }
 
-/**
- * Add the button to a rendered message.
- */
-function addButtonToMessage(messageElement) {
-    if (!messageElement) {
-        return;
-    }
 
-    // Don't add the button twice.
+function addButton(messageElement) {
+    if (!messageElement) return;
+
+    // Already added.
     if (messageElement.querySelector(`.${BUTTON_CLASS}`)) {
         return;
     }
 
     const messageId = Number(messageElement.getAttribute('mesid'));
 
-    if (!Number.isInteger(messageId) || messageId < 0) {
+    if (!Number.isInteger(messageId)) {
         return;
     }
 
@@ -113,57 +66,78 @@ function addButtonToMessage(messageElement) {
         return;
     }
 
-    // Only add the button to Zach/user messages.
+    // Only show on user/Zach messages.
     if (message.is_user !== true) {
         return;
     }
 
-    // SillyTavern's message button container.
-    const buttonContainer = messageElement.querySelector('.mes_buttons');
+    /*
+     * SillyTavern's message controls can vary slightly between versions.
+     * Try the normal message button container first.
+     */
+    let container = messageElement.querySelector('.mes_buttons');
 
-    if (!buttonContainer) {
+    /*
+     * Fallback: find the message header/button area.
+     */
+    if (!container) {
+        container = messageElement.querySelector('.mes_header');
+    }
+
+    if (!container) {
+        console.warn(
+            'Save Message Markdown: could not find button container',
+            messageElement
+        );
         return;
     }
 
-    const button = createButton(messageId);
+    const button = document.createElement('div');
 
-    // Put our button at the end of the existing buttons.
-    buttonContainer.appendChild(button);
+    button.className = `mes_button ${BUTTON_CLASS}`;
+    button.title = 'Save message as Markdown';
+    button.innerHTML = '<i class="fa-solid fa-file-arrow-down"></i>';
+
+    button.style.cursor = 'pointer';
+
+    button.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        downloadMessage(messageId);
+    });
+
+    container.appendChild(button);
 }
 
-/**
- * Find a rendered message and add our button.
- */
-function handleUserMessageRendered(messageId) {
-    const messageElement = document.querySelector(
-        `.mes[mesid="${messageId}"]`
-    );
 
-    if (messageElement) {
-        addButtonToMessage(messageElement);
-    }
+function scanMessages() {
+    document.querySelectorAll('.mes').forEach(addButton);
 }
 
-/**
- * Initialize the extension.
- */
+
 function init() {
-    const context = SillyTavern.getContext();
-    const {
-        eventSource,
-        event_types
-    } = context;
+    console.log('Save Message Markdown: initializing...');
 
-    // Add the button when a user message is rendered.
-    eventSource.on(
-        event_types.USER_MESSAGE_RENDERED,
-        handleUserMessageRendered
-    );
+    /*
+     * Initial scan.
+     */
+    scanMessages();
 
-    // Also add buttons to messages that already exist when the extension loads.
-    document.querySelectorAll('.mes').forEach(addButtonToMessage);
+    /*
+     * Watch for new messages being added to the chat.
+     */
+    const observer = new MutationObserver(() => {
+        scanMessages();
+    });
 
-    console.log(`[${MODULE_NAME}] Loaded.`);
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+
+    console.log('Save Message Markdown: loaded.');
 }
+
 
 init();
