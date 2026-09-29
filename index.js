@@ -51,22 +51,6 @@ function getUserName(context) {
 }
 
 
-function getChatName(context) {
-    /*
-     * chatId is normally the current chat filename.
-     * Remove the .jsonl extension for the nicer filename.
-     */
-    if (context.chatId && context.chatId.trim()) {
-        return context.chatId
-            .replace(/\.jsonl$/i, '')
-            .replace(/\.json$/i, '')
-            .trim();
-    }
-
-    return 'Chat';
-}
-
-
 function showSaveDialog(messageId) {
     const context = SillyTavern.getContext();
     const message = context.chat?.[messageId];
@@ -87,14 +71,15 @@ function showSaveDialog(messageId) {
     /*
      * Build the default filename:
      *
-     * Character_Chat_User_MessageNumber.md
+     * Character_chat_User_MessageNumber.md
+     *
+     * Examples:
+     *
+     * Charlotte_chat_Zach_042.md
+     * Jasmine_chat_Zach_002.md
      */
     const characterName = sanitizeFilename(
         getCharacterName(context)
-    );
-
-    const chatName = sanitizeFilename(
-        getChatName(context)
     );
 
     const userName = sanitizeFilename(
@@ -104,7 +89,7 @@ function showSaveDialog(messageId) {
     const messageNumber = String(messageId).padStart(3, '0');
 
     const defaultFilename =
-        `${characterName}_${chatName}_${userName}_${messageNumber}.md`;
+        `${characterName}_chat_${userName}_${messageNumber}.md`;
 
 
     /*
@@ -231,15 +216,8 @@ function showSaveDialog(messageId) {
 
 
         /*
-         * IMPORTANT:
-         *
-         * Only the original message text goes into
-         * the Markdown file.
-         *
-         * No character name.
-         * No chat name.
-         * No message number.
-         * No extra instructions.
+         * Only the original message text goes
+         * into the Markdown file.
          */
         const blob = new Blob(
             [text],
@@ -374,12 +352,11 @@ function addButton(messageElement) {
 
 
     /*
-     * THIS IS THE IMPORTANT CHANGE.
+     * Put the button inside SillyTavern's
+     * expanded Message Actions menu.
      *
-     * .mes_buttons is the entire action area.
-     *
-     * .extraMesButtons is the hidden menu that
-     * opens when you click the "..." button.
+     * This is the menu opened by the "..."
+     * button on the message.
      */
     const container =
         messageElement.querySelector(
