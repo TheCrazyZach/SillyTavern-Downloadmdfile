@@ -1,0 +1,7 @@
+.save-message-md-button {
+    cursor: pointer;
+}
+
+.save-message-md-button:hover {
+    opacity: 0.75;
+}
