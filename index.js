@@ -2,66 +2,68 @@ const BUTTON_CLASS = 'save-message-md-button';
 
 
 function sanitizeFilename(name) {
-    return name
+    return String(name || '')
         .replace(/[<>:"/\\|?*\x00-\x1F]/g, '')
         .replace(/\s+/g, ' ')
         .trim()
-        .substring(0, 120);
-}
-
-
-function getChatName(context) {
-    /*
-     * Try to determine the current chat name.
-     * SillyTavern's chat filename is usually available through
-     * the chat metadata/context, but the exact property can vary.
-     */
-
-    const candidates = [
-        context.chatId,
-        context.chatName,
-        context.chatFileName,
-        context.chat_metadata?.chat_id,
-        context.chat_metadata?.chat_name
-    ];
-
-    for (const value of candidates) {
-        if (typeof value === 'string' && value.trim()) {
-            return value
-                .replace(/\.jsonl$/i, '')
-                .replace(/\.json$/i, '')
-                .trim();
-        }
-    }
-
-    return 'Chat';
+        .substring(0, 100);
 }
 
 
 function getCharacterName(context) {
-    /*
-     * Try the current character name first.
-     */
-    if (context.name1 && context.name1.trim()) {
-        return context.name1.trim();
+    // name2 is SillyTavern's current character name.
+    if (context.name2 && context.name2.trim()) {
+        return context.name2.trim();
     }
 
-    if (context.character?.name) {
-        return context.character.name.trim();
+    // Fallback for versions/configurations where name2 isn't populated.
+    if (
+        context.characterId !== undefined &&
+        context.characters?.[context.characterId]?.name
+    ) {
+        return context.characters[context.characterId].name.trim();
     }
 
-    /*
-     * Fallback to the first character message.
-     */
+    // Final fallback: find the first character message.
     if (context.chat) {
         for (const message of context.chat) {
-            if (message?.name && message.is_user !== true) {
+            if (
+                message?.name &&
+                message.is_user !== true &&
+                message.is_system !== true
+            ) {
                 return message.name.trim();
             }
         }
     }
 
     return 'Character';
+}
+
+
+function getUserName(context) {
+    // name1 is the current user's/persona's name.
+    if (context.name1 && context.name1.trim()) {
+        return context.name1.trim();
+    }
+
+    return 'User';
+}
+
+
+function getChatName(context) {
+    /*
+     * chatId is normally the current chat filename.
+     * Remove the .jsonl extension for the nicer filename.
+     */
+    if (context.chatId && context.chatId.trim()) {
+        return context.chatId
+            .replace(/\.jsonl$/i, '')
+            .replace(/\.json$/i, '')
+            .trim();
+    }
+
+    return 'Chat';
 }
 
 
@@ -81,6 +83,12 @@ function showSaveDialog(messageId) {
         return;
     }
 
+
+    /*
+     * Build the default filename:
+     *
+     * Character_Chat_User_MessageNumber.md
+     */
     const characterName = sanitizeFilename(
         getCharacterName(context)
     );
@@ -89,13 +97,18 @@ function showSaveDialog(messageId) {
         getChatName(context)
     );
 
+    const userName = sanitizeFilename(
+        getUserName(context)
+    );
+
     const messageNumber = String(messageId).padStart(3, '0');
 
     const defaultFilename =
-        `${characterName}_${chatName}_${messageNumber}.md`;
+        `${characterName}_${chatName}_${userName}_${messageNumber}.md`;
+
 
     /*
-     * Build a simple modal.
+     * Create the dialog.
      */
     const overlay = document.createElement('div');
 
@@ -103,6 +116,7 @@ function showSaveDialog(messageId) {
 
     overlay.innerHTML = `
         <div class="save-message-md-dialog">
+
             <div class="save-message-md-title">
                 Save Message as Markdown
             </div>
@@ -123,10 +137,11 @@ function showSaveDialog(messageId) {
             <input
                 type="text"
                 class="save-message-md-filename"
-                value=""
+                autocomplete="off"
             />
 
             <div class="save-message-md-buttons">
+
                 <button
                     type="button"
                     class="menu_button save-message-md-cancel"
@@ -140,11 +155,15 @@ function showSaveDialog(messageId) {
                 >
                     Save Markdown
                 </button>
+
             </div>
+
         </div>
     `;
 
+
     document.body.appendChild(overlay);
+
 
     const preview = overlay.querySelector(
         '.save-message-md-preview'
@@ -162,15 +181,18 @@ function showSaveDialog(messageId) {
         '.save-message-md-cancel'
     );
 
+
     preview.value = text;
     filenameInput.value = defaultFilename;
 
+
     /*
-     * Select the filename without the .md extension.
+     * Select the filename without the extension.
      */
     filenameInput.focus();
 
-    const extensionPosition = filenameInput.value.lastIndexOf('.md');
+    const extensionPosition =
+        filenameInput.value.lastIndexOf('.md');
 
     if (extensionPosition > 0) {
         filenameInput.setSelectionRange(
@@ -196,17 +218,28 @@ function showSaveDialog(messageId) {
             return;
         }
 
+
         /*
-         * Make sure the file has the Markdown extension.
+         * Ensure .md extension.
          */
         if (!filename.toLowerCase().endsWith('.md')) {
             filename += '.md';
         }
 
+
         filename = sanitizeFilename(filename);
 
+
         /*
-         * The downloaded file contains ONLY the original message.
+         * IMPORTANT:
+         *
+         * Only the original message text goes into
+         * the Markdown file.
+         *
+         * No character name.
+         * No chat name.
+         * No message number.
+         * No extra instructions.
          */
         const blob = new Blob(
             [text],
@@ -214,6 +247,7 @@ function showSaveDialog(messageId) {
                 type: 'text/markdown;charset=utf-8'
             }
         );
+
 
         const url = URL.createObjectURL(blob);
 
@@ -228,9 +262,11 @@ function showSaveDialog(messageId) {
 
         link.remove();
 
+
         setTimeout(() => {
             URL.revokeObjectURL(url);
         }, 1000);
+
 
         toastr.success(`Saved ${filename}`);
 
@@ -238,7 +274,11 @@ function showSaveDialog(messageId) {
     }
 
 
-    saveButton.addEventListener('click', saveFile);
+    saveButton.addEventListener(
+        'click',
+        saveFile
+    );
+
 
     cancelButton.addEventListener(
         'click',
@@ -248,37 +288,54 @@ function showSaveDialog(messageId) {
 
     /*
      * Escape closes the dialog.
+     *
+     * Ctrl+Enter saves.
      */
-    overlay.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape') {
-            closeDialog();
-        }
+    overlay.addEventListener(
+        'keydown',
+        (event) => {
 
-        if (
-            event.key === 'Enter' &&
-            event.ctrlKey
-        ) {
-            saveFile();
+            if (event.key === 'Escape') {
+                closeDialog();
+            }
+
+            if (
+                event.key === 'Enter' &&
+                event.ctrlKey
+            ) {
+                saveFile();
+            }
+
         }
-    });
+    );
 
 
     /*
-     * Clicking the dark area outside the dialog closes it.
+     * Clicking outside the dialog closes it.
      */
-    overlay.addEventListener('click', (event) => {
-        if (event.target === overlay) {
-            closeDialog();
+    overlay.addEventListener(
+        'click',
+        (event) => {
+
+            if (event.target === overlay) {
+                closeDialog();
+            }
+
         }
-    });
+    );
 }
 
 
 function addButton(messageElement) {
+
     if (!messageElement) {
         return;
     }
 
+
+    /*
+     * Don't add the button twice.
+     */
     if (
         messageElement.querySelector(
             `.${BUTTON_CLASS}`
@@ -287,24 +344,29 @@ function addButton(messageElement) {
         return;
     }
 
+
     const messageId = Number(
         messageElement.getAttribute('mesid')
     );
+
 
     if (!Number.isInteger(messageId)) {
         return;
     }
 
+
     const context = SillyTavern.getContext();
 
     const message = context.chat?.[messageId];
+
 
     if (!message) {
         return;
     }
 
+
     /*
-     * Only show the button on user/Zach messages.
+     * Only add this to user/Zach messages.
      */
     if (message.is_user !== true) {
         return;
@@ -312,31 +374,24 @@ function addButton(messageElement) {
 
 
     /*
-     * Find SillyTavern's existing message action container.
+     * THIS IS THE IMPORTANT CHANGE.
      *
-     * Try several selectors because this has changed
-     * between SillyTavern versions.
+     * .mes_buttons is the entire action area.
+     *
+     * .extraMesButtons is the hidden menu that
+     * opens when you click the "..." button.
      */
-    const selectors = [
-        '.mes_buttons',
-        '.mes_button_container',
-        '.mes_header .mes_buttons',
-        '.mes_header'
-    ];
+    const container =
+        messageElement.querySelector(
+            '.extraMesButtons'
+        );
 
-    let container = null;
-
-    for (const selector of selectors) {
-        container = messageElement.querySelector(selector);
-
-        if (container) {
-            break;
-        }
-    }
 
     if (!container) {
+
         console.warn(
-            'Save Message Markdown: could not find message action container.'
+            'Save Message Markdown: .extraMesButtons not found.',
+            messageElement
         );
 
         return;
@@ -344,8 +399,8 @@ function addButton(messageElement) {
 
 
     /*
-     * Create the button using SillyTavern's normal
-     * message-button classes.
+     * Create the button using SillyTavern's
+     * existing message-button styling.
      */
     const button = document.createElement('div');
 
@@ -362,35 +417,48 @@ function addButton(messageElement) {
     button.addEventListener(
         'click',
         (event) => {
+
             event.preventDefault();
             event.stopPropagation();
 
             showSaveDialog(messageId);
+
         }
     );
 
 
+    /*
+     * Add it to the expanded Message Actions menu.
+     */
     container.appendChild(button);
 }
 
 
 function scanMessages() {
+
     document
         .querySelectorAll('.mes')
         .forEach(addButton);
+
 }
 
 
 function init() {
+
     console.log(
         'Save Message Markdown: initializing...'
     );
 
+
+    /*
+     * Scan messages already on screen.
+     */
     scanMessages();
 
 
     /*
-     * Watch for newly rendered messages.
+     * Watch for new messages and dynamically
+     * rendered messages.
      */
     const observer =
         new MutationObserver(() => {
