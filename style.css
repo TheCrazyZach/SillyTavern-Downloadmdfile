@@ -5,3 +5,116 @@
 .save-message-md-button:hover {
     opacity: 0.75;
 }
+
+
+/* Modal background */
+
+.save-message-md-overlay {
+    position: fixed;
+    inset: 0;
+
+    z-index: 100000;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    background: rgba(0, 0, 0, 0.65);
+}
+
+
+/* Modal itself */
+
+.save-message-md-dialog {
+    width: min(800px, 90vw);
+    max-height: 85vh;
+
+    display: flex;
+    flex-direction: column;
+
+    padding: 20px;
+
+    border-radius: 8px;
+
+    background: var(--SmartThemeBlurTintColor, #222);
+    color: var(--SmartThemeBodyColor, #eee);
+
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+
+/* Title */
+
+.save-message-md-title {
+    font-size: 1.25em;
+    font-weight: bold;
+
+    margin-bottom: 4px;
+}
+
+
+.save-message-md-info {
+    opacity: 0.65;
+
+    margin-bottom: 12px;
+}
+
+
+/* Message preview */
+
+.save-message-md-preview {
+    width: 100%;
+    min-height: 250px;
+    max-height: 50vh;
+
+    resize: vertical;
+
+    box-sizing: border-box;
+
+    padding: 10px;
+
+    margin-bottom: 15px;
+
+    border: 1px solid var(--SmartThemeBorderColor, #555);
+    border-radius: 5px;
+
+    background: var(--SmartThemeBlurTintColor, #111);
+    color: var(--SmartThemeBodyColor, #eee);
+
+    font-family: monospace;
+}
+
+
+/* Filename */
+
+.save-message-md-label {
+    margin-bottom: 5px;
+}
+
+
+.save-message-md-filename {
+    width: 100%;
+
+    box-sizing: border-box;
+
+    padding: 8px;
+
+    margin-bottom: 15px;
+
+    border: 1px solid var(--SmartThemeBorderColor, #555);
+    border-radius: 5px;
+
+    background: var(--SmartThemeBlurTintColor, #111);
+    color: var(--SmartThemeBodyColor, #eee);
+}
+
+
+/* Buttons */
+
+.save-message-md-buttons {
+    display: flex;
+
+    justify-content: flex-end;
+
+    gap: 10px;
+}
